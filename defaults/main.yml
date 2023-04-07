@@ -1,0 +1,16 @@
+---
+rabbitmq_uid: 5672
+rabbitmq_gid: 5672
+
+rabbitmq_docker_image: rabbitmq:latest
+rabbitmq_docker_network: bridge
+rabbitmq_docker_publish_ports: ["5672:5672"]
+rabbitmq_docker_labels: []
+
+rabbitmq_config: ""
+rabbitmq_config_advanced: "[]."
+
+rabbitmq_ssl_files: []
+
+rabbitmq_users: []
+rabbitmq_plugins: []

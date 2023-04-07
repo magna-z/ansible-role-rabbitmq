@@ -1,0 +1,7 @@
+---
+- name: restart service rabbitmq
+  ansible.builtin.systemd:
+    name: rabbitmq
+    daemon_reload: true
+    enabled: true
+    state: restarted

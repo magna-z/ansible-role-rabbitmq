@@ -1,0 +1,116 @@
+---
+- name: check mandatory variables
+  ansible.builtin.assert:
+    that:
+      - rabbitmq_admin_password is defined
+    quiet: true
+
+- name: ensure group
+  ansible.builtin.group:
+    name: rabbitmq
+    gid: "{{ rabbitmq_gid }}"
+
+- name: ensure user
+  ansible.builtin.user:
+    name: rabbitmq
+    group: rabbitmq
+    shell: /sbin/nologin
+    uid: "{{ rabbitmq_uid }}"
+    home: /var/lib/rabbitmq
+    create_home: false
+
+- name: ensure work directories
+  ansible.builtin.file:
+    state: directory
+    path: "{{ item }}"
+    owner: "{{ rabbitmq_uid }}"
+    group: "{{ rabbitmq_gid }}"
+    mode: 0700
+  loop: [/etc/rabbitmq, /etc/rabbitmq/ssl, /var/lib/rabbitmq]
+
+- name: ensure config
+  ansible.builtin.copy:
+    dest: /etc/rabbitmq/rabbitmq.conf
+    content: "{{ rabbitmq_config }}"
+    owner: "{{ rabbitmq_uid }}"
+    group: "{{ rabbitmq_gid }}"
+    mode: 0640
+
+- name: ensure advanced config
+  ansible.builtin.copy:
+    dest: /etc/rabbitmq/advanced.config
+    content: "{{ rabbitmq_config_advanced }}"
+    owner: "{{ rabbitmq_uid }}"
+    group: "{{ rabbitmq_gid }}"
+    mode: 0640
+
+- name: ensure ssl files
+  ansible.builtin.copy:
+    dest: "/etc/rabbitmq/ssl/{{ item.filename }}"
+    content: "{{ item.content }}"
+    owner: "{{ rabbitmq_uid }}"
+    group: "{{ rabbitmq_gid }}"
+    mode: 0640
+  loop: "{{ rabbitmq_ssl_files }}"
+
+- name: ensure systemd rabbitmq.service
+  notify: restart service rabbitmq
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/rabbitmq.service
+    owner: root
+    group: root
+    mode: 0644
+    content: |
+      [Unit]
+      Requires=docker.service
+      After=docker.service
+      StartLimitIntervalSec=0
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm --force %N
+      ExecStart=/usr/bin/docker run \
+        --name=%N \
+        --rm=true \
+        --pid=host \
+        --network={{ rabbitmq_docker_network }} \
+        {% if rabbitmq_docker_network != 'host' -%}
+        --hostname=%N \
+        {% for publish in rabbitmq_docker_publish_ports -%}
+        --publish={{ publish }} \
+        {% endfor -%}
+        {% endif -%}
+        --log-driver=none \
+        --stop-timeout=600 \
+        --user={{ rabbitmq_uid }}:{{ rabbitmq_gid }} \
+        --env=RABBITMQ_DEFAULT_USER=admin \
+        --env=RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf \
+        --env=RABBITMQ_ADVANCED_CONFIG_FILE=/etc/rabbitmq/advanced.config \
+        --env=RABBITMQ_ENABLED_PLUGINS_FILE=/var/lib/rabbitmq/enabled_plugins \
+        {% for key,  value in rabbitmq_docker_labels.items() -%}
+        --label={{ key }}={{ value }} \
+        {% endfor -%}
+        --volume=/etc/localtime:/etc/localtime:ro \
+        --volume=/etc/timezone:/etc/timezone:ro \
+        --volume=/etc/rabbitmq:/etc/rabbitmq:ro \
+        --volume=/var/lib/rabbitmq:/var/lib/rabbitmq:rw \
+        --workdir=/var/lib/rabbitmq \
+        --entrypoint=/opt/rabbitmq/sbin/rabbitmq-server \
+        {{ rabbitmq_docker_image }}
+      ExecStop=/usr/bin/docker stop %N
+      Restart=always
+      RestartSec=10
+      KillMode=process
+      [Install]
+      WantedBy=multi-user.target
+
+- name: execute handlers
+  meta: flush_handlers
+
+- name: start service rabbitmq
+  ansible.builtin.systemd:
+    name: rabbitmq
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: configure
+  include_tasks: configure.yml

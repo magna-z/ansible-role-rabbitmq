@@ -1,0 +1,44 @@
+---
+- name: ensure rabbitmq binaries wrappers
+  ansible.builtin.copy:
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+    content: |
+      #!/usr/bin/env bash
+      set -o noglob
+      exec docker exec -ti rabbitmq {{ item }} $@
+  loop:
+    - rabbitmqctl
+    - rabbitmq-diagnostics
+    - rabbitmq-env
+    - rabbitmq-plugins
+    - rabbitmq-queues
+    - rabbitmq-streams
+    - rabbitmq-upgrade
+
+- name: ensure admin password
+  community.rabbitmq.rabbitmq_user:
+    user: admin
+    password: "{{ rabbitmq_admin_password }}"
+    update_password: always
+    tags: administrator,management
+
+- name: ensure users
+  community.rabbitmq.rabbitmq_user:
+    user: "{{ item.username }}"
+    password: "{{ item.password }}"
+    tags: "{{ (item.tags | default([]) | length > 0) | ternary((item.tags | default([]) | join(',')), omit) }}"
+    vhost: "{{ item.vhost | default(omit) }}"
+    read_priv: "{{ item.read_priv | default(omit) }}"
+    write_priv: "{{ item.write_priv | default(omit) }}"
+    configure_priv: "{{ item.configure_priv | default(omit) }}"
+    topic_permissions: "{{ item.topic_permissions | default(omit) }}"
+    update_password: always
+  loop: "{{ rabbitmq_users }}"
+
+- name: ensure plugins
+  community.rabbitmq.rabbitmq_plugin:
+    names: "{{ rabbitmq_plugins | join(',') }}"
+  when: rabbitmq_plugins | length > 0
