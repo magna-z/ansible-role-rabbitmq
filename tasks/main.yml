@@ -85,8 +85,8 @@
         --env=RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf \
         --env=RABBITMQ_ADVANCED_CONFIG_FILE=/etc/rabbitmq/advanced.config \
         --env=RABBITMQ_ENABLED_PLUGINS_FILE=/var/lib/rabbitmq/enabled_plugins \
-        {% for key,  value in rabbitmq_docker_labels.items() -%}
-        --label={{ key }}={{ value }} \
+        {% for key, value in rabbitmq_docker_labels.items() -%}
+        --label={{ key }}="{{ value }}" \
         {% endfor -%}
         --volume=/etc/localtime:/etc/localtime:ro \
         --volume=/etc/timezone:/etc/timezone:ro \
@@ -111,6 +111,13 @@
     daemon_reload: true
     enabled: true
     state: started
+
+- name: wait rabbitmq
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 5672
+    timeout: 60
+  retries: 5
 
 - name: configure
   include_tasks: configure.yml

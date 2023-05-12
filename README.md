@@ -1,7 +1,7 @@
 rabbitmq
 ---
 
-Configure and run RabbitMQ from docker image as systemd.service.
+Configure and run vanila RabbitMQ from Docker image as systemd.service.
 
 
 ### Links:
