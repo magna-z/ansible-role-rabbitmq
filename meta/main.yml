@@ -1,10 +1,10 @@
 ---
 dependencies: []
 galaxy_info:
-  description: Configure and run vanila RabbitMQ from Docker image as systemd.service
+  description: Configure and run RabbitMQ from Docker image as systemd.service
   author: Maxim Zalysin
   license: MIT
-  min_ansible_version: "2.14"
+  min_ansible_version: "2.15"
   platforms:
     - name: GenericLinux
       version: [any]

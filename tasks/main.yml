@@ -3,6 +3,7 @@
   ansible.builtin.assert:
     that:
       - rabbitmq_admin_password is defined
+      - rabbitmq_main_config is defined
     quiet: true
 
 - name: ensure group
@@ -25,33 +26,49 @@
     path: "{{ item }}"
     owner: "{{ rabbitmq_uid }}"
     group: "{{ rabbitmq_gid }}"
-    mode: 0700
+    mode: "0700"
   loop: [/etc/rabbitmq, /etc/rabbitmq/ssl, /var/lib/rabbitmq]
 
 - name: ensure config
+  notify: restart service rabbitmq
   ansible.builtin.copy:
     dest: /etc/rabbitmq/rabbitmq.conf
-    content: "{{ rabbitmq_config }}"
+    content: "{{ rabbitmq_main_config }}"
     owner: "{{ rabbitmq_uid }}"
     group: "{{ rabbitmq_gid }}"
-    mode: 0640
+    mode: "0640"
 
 - name: ensure advanced config
+  notify: restart service rabbitmq
   ansible.builtin.copy:
     dest: /etc/rabbitmq/advanced.config
-    content: "{{ rabbitmq_config_advanced }}"
+    content: "{{ rabbitmq_advanced_config }}"
     owner: "{{ rabbitmq_uid }}"
     group: "{{ rabbitmq_gid }}"
-    mode: 0640
+    mode: "0640"
 
 - name: ensure ssl files
-  ansible.builtin.copy:
-    dest: "/etc/rabbitmq/ssl/{{ item.filename }}"
-    content: "{{ item.content }}"
-    owner: "{{ rabbitmq_uid }}"
-    group: "{{ rabbitmq_gid }}"
-    mode: 0640
-  loop: "{{ rabbitmq_ssl_files }}"
+  notify: restart service rabbitmq
+  block:
+    - name: find current configs
+      ansible.builtin.find:
+        paths: /etc/rabbitmq/ssl
+      register: _rabbitmq_ssl
+
+    - name: remove current configs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _rabbitmq_ssl.files }}"
+
+    - name: ensure config files
+      ansible.builtin.copy:
+        dest: "/etc/rabbitmq/ssl/{{ item.filename }}"
+        content: "{{ item.content }}"
+        owner: "{{ rabbitmq_uid }}"
+        group: "{{ rabbitmq_gid }}"
+        mode: "0640"
+      loop: "{{ rabbitmq_ssl_files }}"
 
 - name: ensure systemd rabbitmq.service
   notify: restart service rabbitmq
@@ -59,7 +76,7 @@
     dest: /etc/systemd/system/rabbitmq.service
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     content: |
       [Unit]
       Requires=docker.service
@@ -85,9 +102,9 @@
         --env=RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf \
         --env=RABBITMQ_ADVANCED_CONFIG_FILE=/etc/rabbitmq/advanced.config \
         --env=RABBITMQ_ENABLED_PLUGINS_FILE=/var/lib/rabbitmq/enabled_plugins \
-        {% for key, value in rabbitmq_docker_labels.items() -%}
+        {% if rabbitmq_docker_labels | length > 0 %}{% for key, value in rabbitmq_docker_labels.items() -%}
         --label={{ key }}="{{ value }}" \
-        {% endfor -%}
+        {% endfor %}{% endif -%}
         --volume=/etc/localtime:/etc/localtime:ro \
         --volume=/etc/timezone:/etc/timezone:ro \
         --volume=/etc/rabbitmq:/etc/rabbitmq:ro \

@@ -25,20 +25,27 @@
     update_password: always
     tags: administrator,management
 
+- name: ensure plugins
+  community.rabbitmq.rabbitmq_plugin:
+    names: "{{ rabbitmq_plugins | join(',') }}"
+  when: rabbitmq_plugins | length > 0
+
+- name: ensure vhosts
+  community.rabbitmq.rabbitmq_vhost:
+    name: "{{ item.name }}"
+    state: "{{ (item.state is defined and item.state == 'absent') | ternary('absent', 'present') }}"
+  loop: "{{ rabbitmq_vhosts }}"
+
 - name: ensure users
   community.rabbitmq.rabbitmq_user:
     user: "{{ item.username }}"
     password: "{{ item.password }}"
+    update_password: always
     tags: "{{ (item.tags | default([]) | length > 0) | ternary((item.tags | default([]) | join(',')), omit) }}"
     vhost: "{{ item.vhost | default(omit) }}"
     read_priv: "{{ item.read_priv | default(omit) }}"
     write_priv: "{{ item.write_priv | default(omit) }}"
     configure_priv: "{{ item.configure_priv | default(omit) }}"
     topic_permissions: "{{ item.topic_permissions | default(omit) }}"
-    update_password: always
+    state: "{{ (item.state is defined and item.state == 'absent') | ternary('absent', 'present') }}"
   loop: "{{ rabbitmq_users }}"
-
-- name: ensure plugins
-  community.rabbitmq.rabbitmq_plugin:
-    names: "{{ rabbitmq_plugins | join(',') }}"
-  when: rabbitmq_plugins | length > 0
